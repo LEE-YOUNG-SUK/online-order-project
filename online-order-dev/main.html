@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <title>🍱 온라인 발주 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="loader"></div>
+    </div>
+
+    <div id="login-container" class="w-full max-w-sm">
+        <div class="bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">🍱 온라인 발주 시스템</h1>
+            <div class="mb-4">
+                <label for="userId" class="block text-gray-700 text-sm font-bold mb-2">아이디</label>
+                <input type="text" id="userId" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="아이디를 입력하세요">
+            </div>
+            <div class="mb-6">
+                <label for="password" class="block text-gray-700 text-sm font-bold mb-2">비밀번호</label>
+                <input type="password" id="password" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="비밀번호를 입력하세요">
+            </div>
+            <button id="login-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300">
+                로그인
+            </button>
+            <p id="login-error" class="text-red-500 text-xs italic mt-4 text-center h-4"></p>
+             <div class="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600 text-center">
+                <strong>테스트 계정:</strong> ID: 0001 / PW: 123456
+            </div>
+        </div>
+    </div>
+
+    <div id="app-container" class="w-full max-w-4xl hidden">
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">🍱 온라인 발주 시스템</h1>
+                    <p id="user-info" class="text-gray-600 mt-1"></p>
+                </div>
+                <button id="logout-button" class="mt-4 sm:mt-0 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                    로그아웃
+                </button>
+            </header>
+
+            <section class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h2 class="text-lg font-semibold text-gray-700 mb-3">📅 발주 기간 선택</h2>
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                    <div class="w-full sm:w-auto flex-1">
+                        <label for="start-date" class="text-sm font-medium text-gray-600">시작일</label>
+                        <input type="date" id="start-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="w-full sm:w-auto flex-1">
+                        <label for="end-date" class="text-sm font-medium text-gray-600">종료일</label>
+                        <input type="date" id="end-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <button id="query-button" class="w-full sm:w-auto mt-4 sm:mt-0 self-end bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        📋 조회
+                    </button>
+                </div>
+            </section>
+
+            <section id="order-section">
+                <h2 class="text-lg font-semibold text-gray-700 mb-3">📦 발주 수량 입력</h2>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full bg-white">
+                        <thead id="table-header" class="bg-gray-100">
+                        </thead>
+                        <tbody id="table-body">
+                           <tr><td colspan="4" class="text-center py-8 text-gray-500">조회 버튼을 눌러 발주를 시작하세요.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                        <button id="save-button" disabled class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed">💾 저장</button>
+                        <button id="reset-button" disabled class="ml-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed">🗑️ 초기화</button>
+                    </div>
+                    <div id="summary" class="text-lg font-semibold text-gray-800">
+                        📊 발주 요약: 총 0개
+                    </div>
+                </div>
+                <p id="save-status" class="text-sm text-green-600 mt-4 h-4 text-right"></p>
+            </section>
+        </div>
+    </div>
+
+    <div id="admin-container" class="w-full max-w-6xl hidden">
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
+            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">👑 관리자 대시보드</h1>
+                    <p id="admin-user-info" class="text-gray-600 mt-1"></p>
+                </div>
+                <button id="admin-logout-button" class="mt-4 sm:mt-0 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                    로그아웃
+                </button>
+            </header>
+
+            <nav id="admin-navigation" class="bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg p-3 mb-6 shadow-sm">
+                <div class="flex flex-wrap gap-2">
+                    <button class="nav-btn bg-blue-600 text-white px-4 py-2 rounded-lg font-medium shadow-md hover:bg-blue-700 transition-all duration-200 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                        메인
+                    </button>
+                    <button id="nav-period" class="nav-btn bg-white hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium shadow-sm transition-all duration-200 flex items-center gap-2 border border-gray-200">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        기간별 조회
+                    </button>
+                    <button id="nav-monthly" class="nav-btn bg-white hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium shadow-sm transition-all duration-200 flex items-center gap-2 border border-gray-200">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        월간 조회
+                    </button>
+                    <div class="ml-auto flex items-center text-sm text-gray-500">
+                        <span class="hidden sm:inline">v1.1.0</span>
+                    </div>
+                </div>
+            </nav>
+
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="p-4 bg-gray-50 rounded-lg hidden-section">
+                    <h3 class="font-semibold text-gray-700 mb-3">📅 일간 주문 조회</h3>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="daily-date-picker" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <button id="daily-query-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">조회</button>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg hidden-section">
+                    <h3 class="font-semibold text-gray-700 mb-3">🗓️ 월간 주문 조회</h3>
+                    <div class="flex items-center gap-2">
+                         <input type="month" id="monthly-picker" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <button id="monthly-query-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">조회</button>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg md:col-span-3">
+                    <h3 class="font-semibold text-gray-700 mb-3">🖨️ 금일 주문 그룹별 조회</h3>
+                    <button id="today-group-query-btn" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg">오늘 주문 현황 보기</button>
+                </div>
+            </section>
+            
+            <section class="mb-8 p-4 bg-gray-50 rounded-lg hidden-section">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">🏢 거래처별 조회</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                    <div class="sm:col-span-2">
+                        <label for="company-select" class="text-sm font-medium text-gray-600">거래처 선택</label>
+                        <select id="company-select" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></select>
+                    </div>
+                    <div>
+                        <label for="company-start-date" class="text-sm font-medium text-gray-600">시작일</label>
+                        <input type="date" id="company-start-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="company-end-date" class="text-sm font-medium text-gray-600">종료일</label>
+                        <input type="date" id="company-end-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="mt-4 text-right">
+                    <button id="company-query-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">
+                        조회
+                    </button>
+                </div>
+            </section>
+            
+            <div id="admin-edit-controls" class="hidden flex justify-between items-center mb-4">
+                <p class="text-sm text-yellow-700 bg-yellow-100 p-2 rounded-md">✏️ **수정 모드:** 수량 변경 후 '전체 저장' 버튼을 눌러주세요.</p>
+                <div>
+                    <button id="admin-save-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">💾 전체 저장</button>
+                    <button id="admin-cancel-btn" class="ml-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">❌ 취소</button>
+                </div>
+            </div>
+
+            <section id="admin-results-section">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold text-gray-700">조회 결과</h2>
+                    <button id="admin-edit-btn" class="hidden bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">✏️ 수정하기</button>
+                </div>
+                <div id="admin-results-container" class="overflow-x-auto rounded-lg border border-gray-200 min-h-[200px] p-4">
+                    <p class="text-center text-gray-500">조회 버튼을 눌러 현황을 확인하세요.</p>
+                </div>
+                <p id="admin-save-status" class="text-sm text-green-600 mt-4 h-4 text-right"></p>
+            </section>
+        </div>
+    </div>
+    
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

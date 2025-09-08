@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <base target="_top">
+    <title>📅 기간별 주문 조회</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans KR', sans-serif; background-color: #f3f4f6; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .table-container { max-height: 600px; overflow-y: auto; }
+        .sticky-header { position: sticky; top: 0; z-index: 10; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+    
+    <!-- 로딩 오버레이 -->
+    <div id="loading-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="loader"></div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="container mx-auto max-w-7xl p-4">
+        
+        <!-- 헤더 -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">📅 기간별 주문 조회</h1>
+                    <p id="user-info" class="text-gray-600 mt-1"></p>
+                </div>
+                <button id="logout-button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                    로그아웃
+                </button>
+            </div>
+        </div>
+
+        <!-- 네비게이션 -->
+        <nav class="bg-gradient-to-r from-gray-100 to-gray-50 rounded-lg p-3 mb-4 shadow-sm">
+            <div class="flex flex-wrap gap-2">
+                <button id="nav-home" class="nav-btn bg-white hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium shadow-sm transition-all duration-200 flex items-center gap-2 border border-gray-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                    </svg>
+                    메인
+                </button>
+                
+                <button class="nav-btn bg-blue-600 text-white px-4 py-2 rounded-lg font-medium shadow-md hover:bg-blue-700 transition-all duration-200 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    기간별 조회
+                </button>
+                
+                <button id="nav-monthly" class="nav-btn bg-white hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium shadow-sm transition-all duration-200 flex items-center gap-2 border border-gray-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    월간 조회
+                </button>
+            </div>
+        </nav>
+
+        <!-- 조회 조건 -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <h2 class="text-lg font-semibold text-gray-700 mb-4">🔍 조회 조건</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">거래처</label>
+                    <select id="company-select" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="전체">전체 거래처</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">시작일</label>
+                    <input type="date" id="start-date" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-600 mb-1">종료일</label>
+                    <input type="date" id="end-date" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="flex items-end">
+                    <button id="search-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        조회
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과 영역 -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-700">📊 조회 결과</h2>
+                <div id="result-summary" class="text-sm text-gray-600"></div>
+            </div>
+            
+            <!-- 결과 테이블 컨테이너 -->
+            <div id="results-container" class="table-container">
+                <p class="text-center text-gray-500 py-8">조회 버튼을 눌러 데이터를 조회하세요.</p>
+            </div>
+            
+            <!-- 요약 정보 -->
+            <div id="summary-section" class="mt-4 pt-4 border-t hidden">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <p class="text-xs text-gray-600">총 주문 건수</p>
+                        <p id="total-count" class="text-xl font-bold text-gray-800">0</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <p class="text-xs text-gray-600">도시락 합계</p>
+                        <p id="dosirak-total" class="text-xl font-bold text-gray-800">0</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <p class="text-xs text-gray-600">도시락(양많이) 합계</p>
+                        <p id="dosirak-big-total" class="text-xl font-bold text-gray-800">0</p>
+                    </div>
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <p class="text-xs text-gray-600">샐러드 합계</p>
+                        <p id="salad-total" class="text-xl font-bold text-gray-800">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+    import { callAppsScript } from './src/api.js';
+
+    // 전역 변수
+    let currentUser = null;
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const isLocal = typeof google === 'undefined';
+    
+    // 헬퍼 함수
+    const showLoader = (show) => loadingOverlay.classList.toggle('hidden', !show);
+    const formatDate = (date) => date.toISOString().slice(0, 10);
+
+    // 세션 체크 및 권한 확인
+    function checkSession() {
+        const savedUser = sessionStorage.getItem('userInfo');
+        if (!savedUser) {
+            alert('로그인이 필요합니다.');
+            window.location.href = isLocal ? '/main.html' : '/';
+            return false;
+        }
+        
+        currentUser = JSON.parse(savedUser);
+        if (currentUser.tier !== 'master') {
+            alert('접근 권한이 없습니다.');
+            window.location.href = isLocal ? '/main.html' : '/';
+            return false;
+        }
+        
+        document.getElementById('user-info').textContent = `관리자: ${currentUser.company} (${currentUser.id})`;
+        return true;
+    }
+
+    // 초기화
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!checkSession()) return;
+        
+        initializeDates();
+        loadCompanyList();
+        setupEventListeners();
+        setupNavigation();
+    });
+
+    // 날짜 초기화
+    function initializeDates() {
+        const today = new Date();
+        const sevenDaysLater = new Date();
+        sevenDaysLater.setDate(today.getDate() + 7);
+        
+        document.getElementById('start-date').value = formatDate(today);
+        document.getElementById('end-date').value = formatDate(sevenDaysLater);
+    }
+
+    // 거래처 목록 로드 (✅ callAppsScript 방식으로 수정)
+    async function loadCompanyList() {
+        try {
+            const companies = await callAppsScript('getAccountList');
+            const select = document.getElementById('company-select');
+            companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company;
+                option.textContent = company;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('거래처 목록 로드 실패:', error);
+        }
+    }
+
+    // 이벤트 리스너 설정 (✅ 로그아웃 방식 수정)
+    function setupEventListeners() {
+        document.getElementById('search-btn').addEventListener('click', searchOrders);
+        
+        document.getElementById('logout-button').addEventListener('click', () => {
+            sessionStorage.removeItem('userInfo');
+            window.location.href = isLocal ? '/main.html' : '/';
+        });
+        
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.type === 'date') {
+                searchOrders();
+            }
+        });
+    }
+
+    // 네비게이션 설정 (✅ 조건부 내비게이션으로 수정)
+    function setupNavigation() {
+        if (isLocal) {
+            document.getElementById('nav-home').addEventListener('click', () => window.location.href = '/main.html');
+            document.getElementById('nav-monthly').addEventListener('click', () => window.location.href = '/monthly-orders.html');
+        } else {
+            google.script.run
+                .withSuccessHandler(function(scriptUrl) {
+                    document.getElementById('nav-home').addEventListener('click', () => window.location.href = scriptUrl);
+                    document.getElementById('nav-monthly').addEventListener('click', () => window.location.href = scriptUrl + '?page=monthly');
+                })
+                .getScriptUrl();
+        }
+    }
+
+    // (추가) 뒤로가기 문제 해결을 위한 코드
+    window.addEventListener('pageshow', function(event) {
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
+        }
+    });
+
+    // 주문 조회 (✅ 이미 잘 수정하셨습니다!)
+    async function searchOrders() {
+        const company = document.getElementById('company-select').value;
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        
+        if (!startDate || !endDate) {
+            alert('시작일과 종료일을 모두 선택해주세요.');
+            return;
+        }
+        
+        if (new Date(startDate) > new Date(endDate)) {
+            alert('시작일은 종료일보다 이전이어야 합니다.');
+            return;
+        }
+        
+        showLoader(true);
+        document.getElementById('results-container').innerHTML = 
+            '<p class="text-center text-gray-500 py-8">데이터를 조회하고 있습니다...</p>';
+        
+        try {
+            const orders = await callAppsScript('getPeriodOrdersWithFilter', [company, startDate, endDate]);
+            displayResults(orders);
+        } catch (error) {
+            handleError(error);
+        }
+    }
+
+    // 결과 표시 (수정 없음)
+    function displayResults(orders) {
+        showLoader(false);
+        const container = document.getElementById('results-container');
+        const summarySection = document.getElementById('summary-section');
+        
+        if (!orders || orders.length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">조회된 데이터가 없습니다.</p>';
+            summarySection.classList.add('hidden');
+            document.getElementById('result-summary').textContent = '';
+            return;
+        }
+        
+        const summary = {
+            total: orders.length,
+            dosirak: 0,
+            dosirakBig: 0,
+            salad: 0
+        };
+        
+        orders.forEach(order => {
+            if (order.product === '도시락') summary.dosirak += order.quantity;
+            else if (order.product === '도시락(양많이)') summary.dosirakBig += order.quantity;
+            else if (order.product === '샐러드') summary.salad += order.quantity;
+        });
+        
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-100 sticky-header">
+                        <tr>
+                            <th class="py-2 px-3 text-left text-sm font-semibold text-gray-700">날짜</th>
+                            <th class="py-2 px-3 text-left text-sm font-semibold text-gray-700">거래처</th>
+                            <th class="py-2 px-3 text-left text-sm font-semibold text-gray-700">상품</th>
+                            <th class="py-2 px-3 text-center text-sm font-semibold text-gray-700">수량</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+        `;
+        
+        orders.forEach((order, index) => {
+            html += `
+                <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors">
+                    <td class="py-2 px-3 text-sm">${order.date}</td>
+                    <td class="py-2 px-3 text-sm font-medium">${order.company}</td>
+                    <td class="py-2 px-3 text-sm">${order.product}</td>
+                    <td class="py-2 px-3 text-sm text-center font-medium">${order.quantity}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        
+        document.getElementById('result-summary').textContent = `총 ${orders.length}건 조회됨`;
+        document.getElementById('total-count').textContent = summary.total;
+        document.getElementById('dosirak-total').textContent = summary.dosirak;
+        document.getElementById('dosirak-big-total').textContent = summary.dosirakBig;
+        document.getElementById('salad-total').textContent = summary.salad;
+        summarySection.classList.remove('hidden');
+    }
+
+    // 에러 처리 (수정 없음)
+    function handleError(error) {
+        showLoader(false);
+        console.error('조회 오류:', error);
+        document.getElementById('results-container').innerHTML = 
+            `<p class="text-center text-red-500 py-8">조회 중 오류가 발생했습니다: ${error.message || error}</p>`;
+    }
+</script>
+</body>
+</html>

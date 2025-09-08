@@ -1,0 +1,50 @@
+/* 전체 페이지의 기본 글꼴과 배경색을 설정합니다. */
+body { 
+    font-family: 'Inter', 'Noto Sans KR', sans-serif; 
+    background-color: #f3f4f6; 
+}
+
+/* 로딩 아이콘의 모양과 애니메이션을 정의합니다. */
+.loader { 
+    border: 4px solid #f3f3f3; 
+    border-top: 4px solid #3b82f6; 
+    border-radius: 50%; 
+    width: 40px; 
+    height: 40px; 
+    animation: spin 1s linear infinite; 
+}
+
+/* 'spin' 애니메이션(빙글빙글 도는 효과)을 정의합니다. */
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+/* 숫자 입력 필드(input type=number)의 기본 증감 버튼을 숨깁니다. */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* 파이어폭스 및 최신 브라우저를 위한 설정 */
+input[type=number] {
+    -moz-appearance: textfield; /* 파이어폭스용 */
+    appearance: none;          /* 표준 속성 (VS Code가 추천한 것) */
+}
+
+/* 비활성화된 숫자 입력 필드의 배경색과 커서 모양을 설정합니다. */
+input[type=number]:disabled { 
+    background-color: #e5e7eb; 
+    cursor: not-allowed; 
+}
+
+/* 내용이 수정된 표의 셀(cell)에 노란색 배경을 적용합니다. */
+.cell-modified { 
+    background-color: #fff3cd !important; 
+}
+
+/* 특정 섹션을 완전히 숨길 때 사용하는 클래스입니다. */
+.hidden-section { 
+    display: none !important; 
+}
