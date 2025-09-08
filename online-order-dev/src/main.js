@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = null;
     let adminEditMode = false;
     let originalAdminData = null; 
+    // 🆕 상세 검색용 변수 추가
+    let currentSearchMode = 'today'; // 'today' | 'detailed'
+    let lastSearchParams = null;
+
     const productOrder = ['도시락', '도시락(양많이)', '샐러드'];
     const isLocal = typeof google === 'undefined';
 
@@ -378,12 +382,17 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyQueryBtn.addEventListener('click', handleMonthlyQuery);
         todayGroupQueryBtn.addEventListener('click', handleTodayGroupQuery);
         companyQueryBtn.addEventListener('click', handleCompanyQuery);
+        // 🆕 상세 검색 관련 설정 추가
+        setupDetailedSearch();
         adminEditBtn.addEventListener('click', () => toggleAdminEditMode(true));
         adminCancelBtn.addEventListener('click', () => toggleAdminEditMode(false));
         adminSaveBtn.addEventListener('click', handleAdminSave);
         initializeDates();
         populateCompanyDropdown();
+        populateAdminCompanyDropdown(); // 🆕 관리자용 거래처 드롭다운 별도 설정
         initializeAdminNavigation();
+        // 🆕 오늘 날짜 표시
+        document.getElementById('today-date').textContent = new Date().toLocaleDateString('ko-KR');
     }
 
     // ✅ 조건부 내비게이션으로 수정
@@ -399,10 +408,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // 🆕 상세 검색 설정
+    function setupDetailedSearch() {
+        const detailedSearchBtn = document.getElementById('detailed-search-btn');
+        const adminDatePicker = document.getElementById('admin-date-picker');
+        const adminCompanySelect = document.getElementById('admin-company-select');
+        // 오늘 날짜를 기본값으로 설정
+        adminDatePicker.value = formatDate(new Date());
+        // 검색 버튼 클릭 이벤트
+        detailedSearchBtn.addEventListener('click', handleDetailedSearch);
+        // Enter 키로 검색
+        adminDatePicker.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleDetailedSearch();
+        });
+        adminCompanySelect.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleDetailedSearch();
+        });
+    }
+
     const clearAdminResults = () => {
         adminResultsContainer.innerHTML = '<p class="text-center text-gray-500">조회 버튼을 눌러 현황을 확인하세요.</p>';
         adminEditBtn.classList.add('hidden');
         adminSaveStatus.textContent = '';
+        currentSearchMode = 'today'; // 🆕 검색 모드 초기화
+        lastSearchParams = null; // 🆕 검색 파라미터 초기화
         if (adminEditMode) toggleAdminEditMode(false);
     };
     
@@ -477,6 +506,107 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             showLoader(false);
         }
+    }
+
+    // 🆕 관리자용 거래처 드롭다운 채우기
+    async function populateAdminCompanyDropdown() {
+        try {
+            const list = await callAppsScript('getAccountList');
+            const adminSelect = document.getElementById('admin-company-select');
+            adminSelect.innerHTML = '<option value="전체">전체 거래처</option>';
+            list.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company;
+                option.textContent = company;
+                adminSelect.appendChild(option);
+            });
+            // 활성 거래처 수 표시
+            document.getElementById('active-companies').textContent = list.length;
+        } catch (error) {
+            console.error("관리자 거래처 목록 로드 실패:", error);
+        }
+    }
+
+    // 🆕 상세 검색 처리
+    async function handleDetailedSearch() {
+        const selectedDate = document.getElementById('admin-date-picker').value;
+        const selectedCompany = document.getElementById('admin-company-select').value;
+        if (!selectedDate) {
+            alert('조회할 날짜를 선택해주세요.');
+            return;
+        }
+        showLoader(true);
+        clearAdminResults();
+        currentSearchMode = 'detailed';
+        lastSearchParams = { date: selectedDate, company: selectedCompany };
+        try {
+            // 서버에 company 파라미터도 함께 전달
+            const orders = await callAppsScript('getDailyOrders', [selectedDate, selectedCompany]);
+            // 결과 렌더링
+            if (selectedCompany !== '전체') {
+                renderDetailedSearchResults(orders, selectedDate, selectedCompany);
+            } else {
+                renderDailyReport(orders);
+            }
+            // 상태 표시 업데이트
+            adminSaveStatus.textContent = `조회 완료: ${selectedDate} / ${selectedCompany}`;
+        } catch (error) {
+            renderAdminError(error);
+        } finally {
+            showLoader(false);
+        }
+    }
+
+    // 🆕 상세 검색 결과 렌더링 (거래처 필터링된 경우)
+    function renderDetailedSearchResults(orders, date, company) {
+        if (!orders || orders.length === 0) {
+            adminResultsContainer.innerHTML = `
+                <div class="text-center py-8">
+                    <p class="text-gray-500">📭 ${date} - ${company}</p>
+                    <p class="text-gray-400 text-sm mt-2">해당 날짜에 주문이 없습니다.</p>
+                </div>`;
+            return;
+        }
+        // 그룹핑 없이 단일 거래처 표시
+        const headers = ['날짜', '거래처', '상품명', '수량'];
+        let tableHtml = `
+            <div class="mb-4">
+                <h4 class="text-lg font-bold text-gray-800">📋 ${company} - ${date} 주문 내역</h4>
+            </div>
+            <table class="min-w-full bg-white text-sm">
+                <thead>
+                    <tr class="bg-gray-100">
+                        ${headers.map(h => `<th class="py-2 px-3 text-left font-semibold text-gray-600">${h}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>`;
+        const summary = {};
+        orders.forEach(order => {
+            tableHtml += `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2 px-3">${date}</td>
+                    <td class="py-2 px-3 font-medium">${order.company}</td>
+                    <td class="py-2 px-3">${order.product}</td>
+                    <td class="py-2 px-3 text-center">${order.quantity}</td>
+                </tr>`;
+            if (!summary[order.product]) summary[order.product] = 0;
+            summary[order.product] += order.quantity;
+        });
+        tableHtml += '</tbody></table>';
+        // 요약 정보
+        let summaryHtml = `
+            <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                <h4 class="font-bold mb-2 text-blue-900">📊 주문 요약</h4>
+                <div class="grid grid-cols-3 gap-4">`;
+        for (const product in summary) {
+            summaryHtml += `
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">${product}</p>
+                    <p class="text-xl font-bold text-blue-700">${summary[product]}개</p>
+                </div>`;
+        }
+        summaryHtml += '</div></div>';
+        adminResultsContainer.innerHTML = tableHtml + summaryHtml;
     }
 
     function renderDailyReport(orders) {
