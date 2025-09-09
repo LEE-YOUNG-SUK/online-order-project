@@ -1,5 +1,5 @@
 // ✅ 1단계에서 새로 복사한 Apps Script 웹 앱 URL을 여기에 붙여넣으세요.
-const API_URL = "https://script.google.com/macros/s/AKfycbw4KW8_y7PV2-L5NUiFaG_Z_XL0Oy9M5f2Hd5bqMWeqSeqd77FnDnm5fxPUbzNwKb5H/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbyQ2W2N3-f3znPe5Txho-Sjr202kDkas30WrhyQ9DA/dev";
 
 // Apps Script 함수를 JSONP(GET) 방식으로 호출하는 새로운 공용 함수
 export function callAppsScript(functionName, args = []) {

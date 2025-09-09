@@ -308,12 +308,66 @@ function saveToSheet(orders) {
   }
 }
 
-function getDailyOrders(date) {
-  const query = {
-    "structuredQuery": { "from": [{"collectionId": "orders"}], "where": { "fieldFilter": { "field": { "fieldPath": "date" }, "op": "EQUAL", "value": { "stringValue": date } } } }
-  };
-  const response = callFirestoreApi(':runQuery', 'POST', query);
-  return (response && Array.isArray(response)) ? response.map(item => item.document ? formatFirestoreDocument(item.document) : null).filter(Boolean) : [];
+/**
+ * [수정됨] 특정 날짜의 주문 내역을 조회합니다.
+ * 거래처(company)가 지정된 경우 해당 거래처의 주문만 필터링하여 성능을 최적화합니다.
+ * @param {string} date - 조회할 날짜 (YYYY-MM-DD)
+ * @param {string} [company] - 필터링할 거래처 이름. '전체'이거나 없으면 모든 거래처를 조회.
+ * @returns {Array} 주문 객체 배열
+ */
+function getDailyOrders(date, company) {
+  try {
+    // 기본 필터: 날짜 필터는 항상 포함됩니다.
+    const filters = [
+      {
+        "fieldFilter": {
+          "field": { "fieldPath": "date" },
+          "op": "EQUAL",
+          "value": { "stringValue": date }
+        }
+      }
+    ];
+
+    // company 인자가 있고 '전체'가 아닐 경우, 거래처 필터를 동적으로 추가합니다.
+    // 이렇게 하면 Firestore에서 직접 필터링하므로 Apps Script의 부하가 줄어 성능이 향상됩니다.
+    if (company && company !== '전체') {
+      filters.push({
+        "fieldFilter": {
+          "field": { "fieldPath": "company" },
+          "op": "EQUAL",
+          "value": { "stringValue": company }
+        }
+      });
+    }
+
+    const query = {
+      "structuredQuery": {
+        "from": [{"collectionId": "orders"}],
+        "where": {
+          "compositeFilter": {
+            "op": "AND",
+            "filters": filters
+          }
+        },
+        "orderBy": [
+          { "field": { "fieldPath": "company" }, "direction": "ASCENDING" },
+          { "field": { "fieldPath": "product" }, "direction": "ASCENDING" }
+        ]
+      }
+    };
+
+    const response = callFirestoreApi(':runQuery', 'POST', query);
+    const results = (response && Array.isArray(response)) 
+      ? response.map(item => item.document ? formatFirestoreDocument(item.document) : null).filter(Boolean) 
+      : [];
+      
+    return results;
+
+  } catch (error) {
+    console.error('getDailyOrders error:', error.toString());
+    // 클라이언트에 더 명확한 에러 메시지를 전달합니다.
+    throw new Error(`일일 주문 조회 실패: ${error.message}`);
+  }
 }
 
 function getMonthlyOrders(year, month) {
@@ -336,6 +390,10 @@ function getAccountList() {
   }
 }
 
+/**
+ * [수정] Firestore에서 특정 기간과 거래처의 주문을 조회합니다.
+ * period-orders.html 페이지에서 사용됩니다.
+ */
 function getOrdersByCompany(company, startDate, endDate) {
   const filters = [
     { "fieldFilter": { "field": { "fieldPath": "date" }, "op": "GREATER_THAN_OR_EQUAL", "value": { "stringValue": startDate } } },
@@ -345,66 +403,94 @@ function getOrdersByCompany(company, startDate, endDate) {
     filters.push({ "fieldFilter": { "field": { "fieldPath": "company" }, "op": "EQUAL", "value": { "stringValue": company } } });
   }
   const query = {
-    "structuredQuery": { "from": [{"collectionId": "orders"}], "where": { "compositeFilter": { "op": "AND", "filters": filters } }, "orderBy": [ { "field": { "fieldPath": "date" }, "direction": "ASCENDING" }, { "field": { "fieldPath": "company" }, "direction": "ASCENDING" } ] }
+    "structuredQuery": { 
+      "from": [{"collectionId": "orders"}], 
+      "where": { "compositeFilter": { "op": "AND", "filters": filters } }, 
+      "orderBy": [ 
+        { "field": { "fieldPath": "date" }, "direction": "ASCENDING" }, 
+        { "field": { "fieldPath": "company" }, "direction": "ASCENDING" } 
+      ] 
+    }
   };
   const response = callFirestoreApi(':runQuery', 'POST', query);
   return (response && Array.isArray(response)) ? response.map(item => item.document ? formatFirestoreDocument(item.document) : null).filter(Boolean) : [];
 }
 
-function getTodayOrdersByGroup() {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  const todayStr = `${yyyy}-${mm}-${dd}`;
-  const todayOrders = getDailyOrders(todayStr);
-  const ordersLookup = new Map();
-  todayOrders.forEach(order => {
-    if (!ordersLookup.has(order.company)) {
-      ordersLookup.set(order.company, new Map());
-    }
-    ordersLookup.get(order.company).set(order.product, {
-      quantity: order.quantity,
-      docId: order.docId
-    });
-  });
-  const accountSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("계정");
-  const accountData = accountSheet.getRange(2, 1, accountSheet.getLastRow() - 1, 6).getValues();
-  
-  const groupedData = {};
-  accountData.forEach(row => {
-    const companyName = row[0];
-    if (!companyName) return; 
+/**
+ * [대체됨] 특정 날짜의 주문을 그룹별로 조회합니다. 주문이 없는 업체도 포함합니다.
+ * @param {string} date - 조회할 날짜 (YYYY-MM-DD)
+ * @param {string} [companyFilter] - 필터링할 거래처 이름. '전체'이거나 없으면 모든 거래처를 조회.
+ * @returns {Array} 그룹화된 주문 객체 배열
+ */
+function getGroupedOrdersByDate(date, companyFilter) {
+  try {
+    // 1. 계정 시트에서 모든 거래처 정보 가져오기
+    const accountSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("계정");
+    let allAccountData = accountSheet.getRange(2, 1, accountSheet.getLastRow() - 1, 6).getValues();
 
-    const groupName = row[4] || '미지정';
-    const sortOrder = row[5] || 999;
-    const userId = String(row[1]).trim();
-
-    if (!groupedData[groupName]) {
-      groupedData[groupName] = { sortOrder: sortOrder, companies: [] };
+    // 2. 특정 거래처 필터가 있으면 해당 거래처만 남김
+    if (companyFilter && companyFilter !== '전체') {
+      allAccountData = allAccountData.filter(row => row[0] === companyFilter);
     }
-    
-    const companyOrders = ordersLookup.get(companyName) || new Map();
-    
-    groupedData[groupName].companies.push({
-      name: companyName,
-      userId: userId,
-      orders: Object.fromEntries(companyOrders)
+
+    // 3. 해당 날짜의 모든 주문 내역을 Firestore에서 한 번에 조회
+    const ordersForDate = getDailyOrders(date);
+
+    // 4. 조회된 주문을 빠른 조회를 위해 Map 형태로 변환
+    const ordersLookup = new Map();
+    ordersForDate.forEach(order => {
+      if (!ordersLookup.has(order.company)) {
+        ordersLookup.set(order.company, new Map());
+      }
+      ordersLookup.get(order.company).set(order.product, {
+        quantity: order.quantity,
+        docId: order.docId
+      });
     });
-  });
-  return Object.entries(groupedData)
-    .sort(([, a], [, b]) => a.sortOrder - b.sortOrder)
-    .map(([groupName, data]) => ({ groupName, companies: data.companies }));
+
+    // 5. 전체 거래처 목록을 기준으로 그룹 데이터 재구성
+    const groupedData = {};
+    allAccountData.forEach(row => {
+      const companyName = row[0];
+      if (!companyName) return;
+
+      const groupName = row[4] || '미지정';
+      const sortOrder = row[5] || 999;
+      const userId = String(row[1]).trim();
+
+      if (!groupedData[groupName]) {
+        groupedData[groupName] = { sortOrder: sortOrder, companies: [] };
+      }
+      
+      // 주문이 있든 없든 모든 업체를 추가하고, 주문이 있으면 데이터 삽입
+      const companyOrders = ordersLookup.get(companyName) || new Map();
+      
+      groupedData[groupName].companies.push({
+        name: companyName,
+        userId: userId,
+        orders: Object.fromEntries(companyOrders) // Map을 일반 객체로 변환
+      });
+    });
+
+    // 6. 정렬 순서에 따라 최종 결과 반환
+    return Object.entries(groupedData)
+      .sort(([, a], [, b]) => a.sortOrder - b.sortOrder)
+      .map(([groupName, data]) => ({ groupName, companies: data.companies }));
+
+  } catch (error) {
+    console.error('getGroupedOrdersByDate error:', error.toString());
+    throw new Error(`그룹별 주문 조회 실패: ${error.message}`);
+  }
 }
 
+
 /**
- * [관리자] 오늘의 주문 현황(수량 및 상태)을 일괄적으로 수정, 생성, 삭제하고 로그를 남깁니다.
+ * [이름 변경 및 일반화] 주문을 일괄적으로 수정, 생성, 삭제하고 로그를 남깁니다.
  * @param {Array<Object>} ordersToUpdate 변경할 주문 목록
  * @param {string} adminId 작업을 수행한 관리자 ID
  * @returns {{success: boolean, message?: string}} 작업 성공 여부
  */
-function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
-  // 최종 수정본
+function updateOrdersAndStatus(ordersToUpdate, adminId) {
   if (!ordersToUpdate || ordersToUpdate.length === 0) {
     return { success: true, message: "변경사항이 없습니다." };
   }
@@ -413,12 +499,11 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
   const baseUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
   const writes = [];
   const timestamp = new Date().toISOString();
-  const todayDate = new Date().toISOString().slice(0, 10);
-
+  
   ordersToUpdate.forEach(item => {
-    const { docId, newQuantity, newStatus, company, product, oldValue, userId } = item;
+    // ✅ [수정] 이제 클라이언트에서 정확한 날짜를 보내줌
+    const { docId, newQuantity, company, product, userId, date } = item;
     
-    // 1. 수량 변경 처리
     if (newQuantity !== undefined && newQuantity !== null) {
       if (docId) { 
         if (newQuantity > 0) {
@@ -435,13 +520,11 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
           });
         } else { 
           // 수량이 0이면 삭제
-          writes.push({ 
-            "delete": `projects/${PROJECT_ID}/databases/(default)/documents/orders/${docId}` 
-          });
+          writes.push({ "delete": `projects/${PROJECT_ID}/databases/(default)/documents/orders/${docId}` });
         }
       } else if (newQuantity > 0) { 
-        // 새 문서 생성 - 문서 ID 형식 수정 (특수문자 제거)
-        const newDocId = `${userId}_${todayDate.replace(/-/g, '')}_${product.replace(/[()]/g, '')}`;
+        // 새 문서 생성
+        const newDocId = `${userId}_${date.replace(/-/g, '')}_${product.replace(/[()]/g, '')}`;
         writes.push({
           update: {
             name: `projects/${PROJECT_ID}/databases/(default)/documents/orders/${newDocId}`,
@@ -450,7 +533,7 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
               company: { stringValue: company },
               product: { stringValue: product },
               quantity: { integerValue: newQuantity },
-              date: { stringValue: todayDate },
+              date: { stringValue: date }, // ✅ 수정된 날짜 사용
               status: { stringValue: "active" },
               timestamp: { timestampValue: timestamp }
             }
@@ -459,21 +542,7 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
       }
     }
 
-    // 2. 상태 변경 처리 (현재 코드에서는 사용하지 않지만 향후 확장을 위해 유지)
-    if (newStatus && docId) {
-      writes.push({
-        update: {
-          name: `projects/${PROJECT_ID}/databases/(default)/documents/orders/${docId}`,
-          fields: { 
-            status: { stringValue: newStatus },
-            timestamp: { timestampValue: timestamp }
-          }
-        },
-        updateMask: { fieldPaths: ["status", "timestamp"] }
-      });
-    }
-
-    // 3. 로그 기록
+    // 로그 기록 (기존과 거의 동일, date만 수정)
     const logId = Utilities.getUuid();
     writes.push({
       update: {
@@ -483,8 +552,8 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
           timestamp: { timestampValue: timestamp },
           company: { stringValue: company },
           product: { stringValue: product },
-          changeDetail: { stringValue: `수량:${oldValue || 0}→${newQuantity || 0}` },
-          date: { stringValue: todayDate },
+          changeDetail: { stringValue: `수량:${item.oldValue || 0}→${newQuantity || 0}` },
+          date: { stringValue: date }, // ✅ 수정된 날짜 사용
           action: { stringValue: newQuantity === 0 && docId ? 'delete' : (docId ? 'update' : 'create') }
         }
       }
@@ -492,47 +561,21 @@ function updateTodaysOrdersAndStatus(ordersToUpdate, adminId) {
   });
 
   try {
-    // batchWrite 요청 보내기
     const batchWriteUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:batchWrite`;
     const response = UrlFetchApp.fetch(batchWriteUrl, {
       method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${accessToken}`, 
-        'Content-Type': 'application/json' 
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       payload: JSON.stringify({ "writes": writes }),
       muteHttpExceptions: true
     });
     
     const responseText = response.getContentText();
-    const responseCode = response.getResponseCode();
+    if (response.getResponseCode() >= 300) throw new Error(responseText);
 
-    if (responseCode >= 300) {
-      Logger.log("BatchWrite Error Response: " + responseText);
-      
-      // 에러 응답 파싱 시도
-      let errorMessage = "일괄 저장에 실패했습니다.";
-      try {
-        const errorJson = JSON.parse(responseText);
-        if (errorJson.error && errorJson.error.message) {
-          errorMessage = errorJson.error.message;
-        }
-      } catch (e) {
-        errorMessage = responseText;
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    // 성공 응답 로깅
-    Logger.log("BatchWrite Success: " + responseText);
     return { success: true, message: "성공적으로 저장되었습니다." };
     
   } catch (e) {
-    Logger.log("updateTodaysOrdersAndStatus Error: " + e.toString());
-    return { 
-      success: false, 
-      message: e.toString() 
-    };
+    Logger.log("updateOrdersAndStatus Error: " + e.toString());
+    return { success: false, message: e.toString() };
   }
 }
