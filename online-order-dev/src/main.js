@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser = null;
     let adminEditMode = false;
     let originalAdminData = null; 
+
     const productOrder = ['도시락', '도시락(양많이)', '샐러드'];
     const isLocal = typeof google === 'undefined';
 
@@ -65,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminSaveBtn = document.getElementById('admin-save-btn');
     const adminCancelBtn = document.getElementById('admin-cancel-btn');
 
-    // ✅ [수정] UI 요소 재정의
     const companySelect = document.getElementById('company-select');
     const dailyDatePicker = document.getElementById('daily-date-picker');
     const detailedSearchBtn = document.getElementById('detailed-search-btn');
@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function initializeDates() {
         const today = new Date();
         
-        // 일반 사용자 날짜 초기화
         if (startDateInput && endDateInput) {
             const tomorrow = new Date();
             tomorrow.setDate(today.getDate() + 1);
@@ -101,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 관리자 날짜 초기화
         if (dailyDatePicker) {
             dailyDatePicker.value = formatDate(today);
         }
@@ -221,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ✅ [추가] 상세 검색 이벤트 핸들러
     async function handleDetailedSearch() {
         const date = dailyDatePicker.value;
         const company = companySelect.value;
@@ -234,9 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoader(true);
         clearAdminResults();
         try {
-            // ✅ [수정] 새로운 통합 서버 함수 호출
             const groups = await callAppsScript('getGroupedOrdersByDate', [date, company]);
-            renderGroupedReport(groups); // 그룹화된 결과 렌더링
+            renderGroupedReport(groups);
             adminSaveStatus.textContent = `조회 완료: ${date} / ${company}`;
         } catch (error) {
             renderAdminError(error);
@@ -245,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ✅ [이름 변경] renderTodayGroupReport -> renderGroupedReport
     function renderGroupedReport(groups) {
         adminSaveStatus.textContent = '';
         if (!groups || groups.length === 0) {
@@ -341,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showLoader(true);
         const ordersToUpdate = [];
-        const date = dailyDatePicker.value; // ✅ [추가] 현재 조회된 날짜 가져오기
+        const date = dailyDatePicker.value;
 
         modifiedCells.forEach(cell => {
             const row = cell.closest('.company-row');
@@ -352,12 +347,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 company: row.dataset.companyName,
                 userId: row.dataset.userId,
                 product: cell.dataset.product,
-                date: date // ✅ [추가] 수정된 날짜 정보 전달
+                date: date
             });
         });
 
         try {
-            // ✅ [수정] 일반화된 서버 함수 호출
             const result = await callAppsScript('updateOrdersAndStatus', [ordersToUpdate, currentUser.id]);
             onAdminSaveSuccess(result);
         } catch(error) {
@@ -370,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.success) {
             adminSaveStatus.textContent = `✅ ${new Date().toLocaleTimeString()}에 성공적으로 저장 및 기록되었습니다.`;
             toggleAdminEditMode(false);
-            handleDetailedSearch(); // ✅ [수정] 저장 후 현재 조건으로 다시 조회
+            handleDetailedSearch();
         } else {
             alert("저장에 실패했습니다: " + result.message);
         }
